@@ -4,7 +4,7 @@
  * Also the function MUST be serializable, and the result must ALSO be serializable.
  * @return {import("./static_detector").SpaDetectorOutput}
  */
-function dynamicScanForSPA() {
+function dynamicScanForSPAFramework() {
   let output = {}
 
   try {
@@ -37,8 +37,24 @@ function dynamicScanForSPA() {
     }
 
     // Handle React case
-    // Suspicion that we can get better results by reverse engineering https://github.com/facebook/react/blob/08c1f79e1e13719ae2b79240bbd8f97178ddd791/packages/react-devtools-extensions/src/injectGlobalHook.js
-    // For now, no better way.
+
+    // NOTICE: https://github.com/facebook/react/blob/08c1f79e1e13719ae2b79240bbd8f97178ddd791/packages/react-devtools-extensions/src/injectGlobalHook.js
+    // By loading the react-devtools extension, we are able to capture version number of ReactDOM (which is fine) that is somewhat new enough (after React Devtools come around).
+    // Per https://reactjs.org/blog/2019/08/15/new-react-devtools.html, should work for 15.x+.
+    // To load an extension, see this: https://dev.to/ajaykumbhare/load-chrome-extensions-in-puppeteer-4fk0
+    // Caveat: can be explicitly disabled: https://stackoverflow.com/questions/42196819/disable-hide-download-the-react-devtools. But likely rare
+    if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+      for (const renderer of window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.values()) {
+        if (renderer.version) {
+          output["react"] = {
+            version: renderer.version,
+            reasonURL: window.location.href,
+            confidence: ConfidenceLevel.HIGH,
+            isStatic: false,
+          }
+        }
+      }
+    }
 
     // Handle AngularJS case
     if (window.angular) {
@@ -64,5 +80,5 @@ function dynamicScanForSPA() {
 }
 
 module.exports = {
-  dynamicScanForSPA,
+  dynamicScanForSPAFramework,
 };
