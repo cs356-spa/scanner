@@ -76,7 +76,10 @@ const testDomains = [
   "https://airbnb.com",
   "https://webpack.js.org",
   // (Occasionally, sometimes not working) Only detecting React presence (old versions of React, likely before 0.15.x/15.x)
-  "https://facebook.com"
+  "https://facebook.com",
+
+  // Ember test targets
+  "https://emberjs.com"
 ]
 
 async function createCustomBrowser() {

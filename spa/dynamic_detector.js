@@ -74,6 +74,16 @@ function dynamicScanForSPAFramework() {
         isStatic: false,
       }
     }
+
+    // Handle Ember
+    if (window.Ember) {
+      output["ember"] = {
+        version: window.Ember.VERSION,
+        reasonURL: window.location.href,
+        confidence: ConfidenceLevel.HIGH,
+        isStatic: false,
+      }
+    }
   } catch (e) {}
 
   return output;
