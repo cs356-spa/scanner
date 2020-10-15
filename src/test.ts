@@ -15,7 +15,7 @@ function sleep(ms) {
 }
 
 async function runOnPage(page, domain) {
-  const sources = [];
+  const sources: {url: string, content: string}[] = [];
   page.on("console", msg => {
     // TODO: msg.args() to capture console content
   });
@@ -96,7 +96,7 @@ async function createCustomBrowser() {
   return browser;
 }
 
-async function main() {
+export async function main() {
   // const browser = await puppeteer.launch();
   const browser = await createCustomBrowser();
   const page = await browser.newPage();
@@ -110,5 +110,3 @@ async function main() {
   debug("Shutting down browser...")
   await browser.close();
 }
-
-main();

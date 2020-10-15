@@ -11,6 +11,8 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
+    "debug": "^4.2.0",
+    "puppeteer": "^5.3.1",
     "@types/esprima": "^4.0.2",
     "@types/node": "^14.6.4",
     "axios": "^0.20.0",
