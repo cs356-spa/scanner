@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as puppeteer from 'puppeteer';
+import { Cluster } from 'puppeteer-cluster';
 import { staticScanForSPAFramework, mergeDetectorOutput }  from './static_detector';
 
 const { dynamicScanForSPAFramework } = require("./dynamic_detector");
@@ -86,27 +87,36 @@ async function createCustomBrowser() {
   const customArgs = [
     `--load-extension=${path.resolve("./extensions/react_devtools/")}`
   ];
-  const browser = await puppeteer.launch({
+  return {
     // defaultViewport: null,
     // executablePath: process.env.chrome,
     // headless: false, // WARNING: we have to make it NOT headless to get the extension to work! This is a sad compromise... See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
     ignoreDefaultArgs: ["--disable-extensions"],
     args: customArgs,
-  });
-  return browser;
+  };
 }
 
 export async function main() {
-  // const browser = await puppeteer.launch();
-  const browser = await createCustomBrowser();
-  const page = await browser.newPage();
-  for (const domain of testDomains) {
-    try {
-      await runOnPage(page, domain);
-    } catch (e) {
-      console.log(e);
-    }
-  }
-  debug("Shutting down browser...")
-  await browser.close();
+  const browserArgs = await createCustomBrowser();
+  const cluster = await Cluster.launch({
+    concurrency: Cluster.CONCURRENCY_CONTEXT,
+    maxConcurrency: 50,
+    puppeteerOptions: browserArgs
+  });
+  console.log('starting browser...');
+
+  for (let domain of testDomains) {
+    cluster.queue(async ({ page }) => {
+      try {
+        await runOnPage(page, domain);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  };
+
+  await cluster.idle();
+  debug("Shutting down cluster...")
+  await cluster.close();
+  debug("Done");
 }
