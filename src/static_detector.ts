@@ -1,9 +1,21 @@
-/**
- * @typedef {"react"|"angular"|"angularjs"|"vue"} SpaType
- * @typedef {{ url: string, content: string }} Source
- * @typedef {{ version?: string, reasonURL: string, confidence: number, isStatic: boolean }} SpaInfo 
- * @typedef {{ [SpaType]: SpaInfo }} SpaDetectorOutput
- */
+type SpaType = "react"|"angular"|"angularjs"|"vue";
+
+interface Source {
+  url: string;
+  content: string;
+}
+
+interface SpaInfo {
+  version?: string,
+  reasonURL: string,
+  confidence: number,
+  isStatic: boolean
+}
+
+type SpaDetectorOutput = {
+  [x in SpaType]: SpaInfo;
+} | {};
+
 
 const ConfidenceLevel = {
   LOW: 0,
@@ -17,13 +29,13 @@ const ConfidenceLevel = {
  * @param {SpaType} spaType
  * @param {SpaInfo} info
  */
-function mergeOutput(output, spaType, info) {
-  if (!(spaType in output) || (info.confidence >= output[spaType].confidence && !output[spaType].version)) {
+export function mergeOutput(output: SpaDetectorOutput, spaType: SpaType, info: SpaInfo) {
+  if (!(spaType in output) || (info.confidence >= output[spaType]!.confidence && !output[spaType]!.version)) {
     output[spaType] = info;
-  } else if (!output[spaType].version && info.version) {
-    output[spaType].version = info.version;
+  } else if (!output[spaType]!.version && info.version) {
+    output[spaType]!.version = info.version;
     if (info.reasonURL) {
-      output[spaType].reasonURL = info.reasonURL;
+      output[spaType]!.reasonURL = info.reasonURL;
     }
     // Confidence level inherits previous level
   }
@@ -34,10 +46,10 @@ function mergeOutput(output, spaType, info) {
  * @param {SpaDetectorOutput} output2
  * @returns {SpaDetectorOutput}
  */
-function mergeDetectorOutput(output1, output2) {
+export function mergeDetectorOutput(output1: SpaDetectorOutput, output2: SpaDetectorOutput) {
   const output = {...output1};
   for (const k in output2) {
-    mergeOutput(output, k, output2[k])
+    mergeOutput(output, k as SpaType, output2[k])
   }
   return output;
 }
@@ -46,7 +58,7 @@ function mergeDetectorOutput(output1, output2) {
  * @param {string} fileURL
  * @return {boolean}
  */
-function isURLFileTypeHTML(fileURL) {
+export function isURLFileTypeHTML(fileURL: string): boolean {
   try {
     const url = new URL(fileURL);
     // Basic extension check
@@ -72,7 +84,7 @@ function isURLFileTypeHTML(fileURL) {
  * @param {string} fileURL
  * @return {boolean}
  */
-function isURLFileTypeJS(fileURL) {
+export function isURLFileTypeJS(fileURL: string): boolean {
   try {
     const url = new URL(fileURL);
     // Basic extension check. This avoids the query/hash at the end problem.
@@ -91,7 +103,7 @@ function isURLFileTypeJS(fileURL) {
  * @param {string} hostname e.g. google.com
  * @returns {boolean}
  */
-function isFileLikelyFirstParty(fileURL, hostname) {
+export function isFileLikelyFirstParty(fileURL: string, hostname: string): boolean {
   // Retrieve identifier of host, usually the second level domain name.
   const hostnameSegments = hostname.split(".");
   const hostId = hostnameSegments.length >= 2 ? hostnameSegments[hostnameSegments.length-2] : "";
@@ -103,7 +115,7 @@ function isFileLikelyFirstParty(fileURL, hostname) {
  * @param {string} content 
  * @param {string} fileURL
  */
-function handleHTMLFile(output, content, fileURL) {
+export function handleHTMLFile(output: SpaDetectorOutput, content: string, fileURL: string) {
   // Angular2 version directly from HTML file
   // https://github.com/angular/angular/issues/16283
   const angular2VersionRegex = /ng\-version=['"]([0-9\.]+)['"]/;
@@ -148,7 +160,7 @@ const REACT_LOOKALIKE_IDS = [
  * @param {string} content 
  * @param {string} fileURL
  */
-function handleJSFile(output, content, fileURL) {
+export function handleJSFile(output: SpaDetectorOutput, content: string, fileURL: string) {
   // TODO: Mostly handle React here. We can expand around a particular string and search nearby version
   // Per https://github.com/facebook/react/pull/4901#issuecomment-142139400, added in 0.14.x (dates back to 2015)
   // An estimate is that given, http://web.archive.org/web/20130607112820/facebook.github.io/react, we have 0.3.x during 2013 (initial public release on May 29, 2013)
@@ -186,7 +198,7 @@ function handleJSFile(output, content, fileURL) {
  * @param {boolean=} allowThirdParty TODO: get this work.
  * @returns {SpaDetectorOutput}
  */
-function staticScanForSPAFramework(sources, host, allowThirdParty = true) {
+export function staticScanForSPAFramework(sources: Source[], host: string, allowThirdParty: boolean = true): SpaDetectorOutput {
   const output = {}
   for (const source of sources) {
     if (isURLFileTypeJS(source.url) /* && isFileLikelyFirstParty(source.url, host) */) { // TODO: enforce no third-party?
@@ -204,7 +216,7 @@ function staticScanForSPAFramework(sources, host, allowThirdParty = true) {
  * @param {Source} source 
  * @returns {boolean}
  */
-function isBundledFile(source) {
+export function isBundledFile(source: Source): boolean {
   // If the file is NOT a JS file, trivially return false
   if (!isURLFileTypeJS(source.url)) {
     return false;
@@ -242,7 +254,7 @@ function isBundledFile(source) {
  * @param {boolean=} requiresBundle Whether we assert that a page is an SPA only if a bundle is identifiable
  * @returns {boolean}
  */
-function isSPA(sources, hostname, output, requiresBundle = false) {
+export function isSPA(sources: Source[], hostname: string, output: SpaDetectorOutput, requiresBundle: boolean = false): boolean {
   /**
    * To decide if a site is SPA, heuristics:
    * 1. SPA framework search output is non-empty
@@ -267,11 +279,3 @@ function isSPA(sources, hostname, output, requiresBundle = false) {
   }
   return false;
 }
-
-
-module.exports = {
-  staticScanForSPAFramework,
-  mergeDetectorOutput,
-  isBundledFile,
-  isSPA,
-};
