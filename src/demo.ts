@@ -1,7 +1,7 @@
-const path = require('path');
+import * as path from 'path';
+import * as puppeteer from 'puppeteer';
+import { staticScanForSPAFramework, mergeDetectorOutput }  from './static_detector';
 
-const puppeteer = require("puppeteer");
-const { staticScanForSPAFramework, mergeDetectorOutput } = require("./static_detector");
 const { dynamicScanForSPAFramework } = require("./dynamic_detector");
 const debug = require("debug")("spa");
 

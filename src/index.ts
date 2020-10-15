@@ -1,5 +1,5 @@
 import { download } from "./top-sites";
-import { main } from "./test";
+import { main } from "./demo";
 
 (async () => {
   // const sites = await download();
