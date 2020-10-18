@@ -1,26 +1,22 @@
 // Taken from https://github.com/webpack-contrib/webpack-bundle-analyzer/blob/master/src/parseUtils.js
 // Copyright JS Foundation and other contributors, MIT License
-const fs = require('fs');
-const _ = require('lodash');
-const acorn = require('acorn');
-const walk = require('acorn-walk');
-
-module.exports = {
-  parseBundle
-};
+import * as fs from "fs";
+import * as _ from "lodash";
+import * as acorn from "acorn";
+import * as walk from "acorn-walk";
 
 /**
  * @param {string} bundlePath
  * @returns {{ src: string, modules: Object }}
  */
-function parseBundle(bundlePath) {
+export function parseBundle(bundlePath: string): { src: string, modules: Object } {
   const content = fs.readFileSync(bundlePath, 'utf8');
   const ast = acorn.parse(content, {
     sourceType: 'script',
     // I believe in a bright future of ECMAScript!
     // Actually, it's set to `2050` to support the latest ECMAScript version that currently exists.
     // Seems like `acorn` supports such weird option value.
-    ecmaVersion: 2050
+    ecmaVersion: 2021
   });
 
   const walkState = {
@@ -36,6 +32,7 @@ function parseBundle(bundlePath) {
 
         // Modules are stored in exports.modules:
         // exports.modules = {};
+        // @ts-ignore
         const {left, right} = node;
 
         if (
@@ -49,14 +46,16 @@ function parseBundle(bundlePath) {
       },
       CallExpression(node, state, c) {
         if (state.locations) return;
-
+        // @ts-ignore
         const args = node.arguments;
 
         // Main chunk with webpack loader.
         // Modules are stored in first argument:
         // (function (...) {...})(<modules>)
         if (
+          // @ts-ignore
           node.callee.type === 'FunctionExpression' &&
+          // @ts-ignore
           !node.callee.id &&
           args.length === 1 &&
           isSimpleModulesList(args[0])
@@ -69,6 +68,7 @@ function parseBundle(bundlePath) {
         // webpackJsonp([<chunks>], <modules>, ...)
         // As function name may be changed with `output.jsonpFunction` option we can't rely on it's default name.
         if (
+          // @ts-ignore
           node.callee.type === 'Identifier' &&
           mayBeAsyncChunkArguments(args) &&
           isModulesList(args[1])
@@ -279,4 +279,10 @@ function getModuleLocation(node) {
     start: node.start,
     end: node.end
   };
+}
+
+if (require.main === module) {
+  // This does not always work unfortunately: for our own generated bundles, it does not successfully parse.
+  // This implies more work should be done on analyzing different webpack configs.
+  console.log(Object.keys(parseBundle("/Users/kun/Desktop/Fall_2020/CS356/Project/scanner/src/package_analyzer/test/bundles/react.16.umd.web.prod.js").modules))
 }

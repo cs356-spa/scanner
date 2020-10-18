@@ -1,21 +1,23 @@
-const { promisify } = require("util");
-const fs = require("fs").promises;
-const path = require("path");
+import { promisify } from "util";
+import { promises as fs } from "fs";
+import * as path from "path";
+import { strict as assert } from "assert";
 
 const resolve = promisify(require("resolve"));
-const parser = require("@babel/parser");
-const traverse = require("@babel/traverse").default;
-const t = require("@babel/types");
+import * as parser from "@babel/parser";
+import traverse from "@babel/traverse"; // default
+import * as t from "@babel/types";
 
-const debug = require("debug")("collect_imports");
+import makeDebug from "debug";
+const debug = makeDebug("collect_imports");
 
 /**
- * Recursively walk all files and collect dependencies along the way.
- * @param {string} filename 
- * @param {Map<string, string>} seen 
- * @param {Set<string>} externalDeps
+ * Recursively walk all files and collect dependencies along the way. New discoveries will be dumped into `seen` and `externalDeps`.
+ * @param filename 
+ * @param seen Notice it is a Map. Key to this map is file path, value is file content.
+ * @param externalDeps
  */
-async function walkRecursive(filename, seen, externalDeps) {
+async function walkRecursive(filename: string, seen: Map<string, string>, externalDeps: Set<string>): Promise<void> {
   try {
     const normalizedFilePath = await resolve(path.resolve(filename));
     if (seen.has(normalizedFilePath) || normalizedFilePath.endsWith(".node")) { // .json is fine (also valid JS, and strings are imported anyways). We don't want .node files.
@@ -39,7 +41,7 @@ async function walkRecursive(filename, seen, externalDeps) {
 
     // Refer to https://github.com/babel/babel/blob/master/packages/babel-parser/ast/spec.md
     // and https://astexplorer.net/
-    const sources = [];
+    const sources: string[] = [];
     traverse(ast, {
       enter(path) {
         if (t.isImportDeclaration(path.node)) { // Not handling export {...} from "./deps" syntax: too new.
@@ -48,6 +50,7 @@ async function walkRecursive(filename, seen, externalDeps) {
             sources.push(source);
           }
         } else if (t.isCallExpression(path.node)
+          // @ts-ignore
           && path.node.callee.name === "require"
           && path.node.arguments && path.node.arguments.length > 0) { // Not handling dynamic import: too unusual.
           const sourceArgument = path.node.arguments[0];
@@ -57,7 +60,7 @@ async function walkRecursive(filename, seen, externalDeps) {
         }
       }
     });
-    const internalDeps = [];
+    const internalDeps: string[] = [];
     for (const source of sources) {
       if (source.startsWith("./") || source.startsWith("../") || source === "." || source === "..") {
         const resolvedSource = await resolve(source, { basedir: path.dirname(normalizedFilePath) });
@@ -68,6 +71,7 @@ async function walkRecursive(filename, seen, externalDeps) {
     }
     await Promise.all(internalDeps.map(source => walkRecursive(source, seen, externalDeps))); // All promises are run concurrently.
   } catch (e) {
+    console.log(e);
     debug(`Error during collect imports: ${e.message}`); // Try resolve as much as possible (definitely edge cases we do not resolve cleanly), so hide the errors
     return;
   }
@@ -76,13 +80,13 @@ async function walkRecursive(filename, seen, externalDeps) {
 /**
  * Collect all import statements (internal/external ones) limited inside of this package (a.k.a. does not resolve into node_modules and builtin modules).
  * This is used to avoid including test files etc.
- * @param {string} filename entry point to collect
- * @param {Map<string, string>=} pastInternalMap internal map that has been scanned in the past to avoid duplicate scanning (when a package has many entry points). New entries will be added to it
- * @returns {{internal: Map<string, string>, external: Set<string>}}
+ * @param filename entry point to collect
+ * @param pastInternalMap internal map that has been scanned in the past to avoid duplicate scanning (when a package has many entry points). New entries will be added to it
+ * @returns `internal` means dependencies appearning in the same package, represented as full path to the dep file. `external` means external dependencies, likely package names or Node builtin modules.
  */
-async function collectImports(filename, pastInternalMap = new Map()) {
+export async function collectImports(filename: string, pastInternalMap = new Map<string, string>()): Promise<{ internal: Map<string, string>, external: Set<string> }> {
   const internal = pastInternalMap;
-  const external = new Set();
+  const external = new Set<string>();
   try {
     await walkRecursive(filename, internal, external);
   } catch (e) {
@@ -94,19 +98,27 @@ async function collectImports(filename, pastInternalMap = new Map()) {
   };
 }
 
-module.exports = {
-  collectImports,
+
+function setEquals<T>(as: Set<T>, bs: Set<T>): boolean {
+  if (as.size !== bs.size) {
+    return false;
+  }
+  for (let a of as) {
+    if (!bs.has(a)) {
+      return false;
+    }
+  }
+  return true;
 }
-
-// async function main() {
-//   // const m = new Map();
-//   // const s = new Set();
-//   // await walkRecursive("../test.js", m, s);
-//   // console.log(m);
-//   // console.log(s);
-//   const {internal, external} = await collectImports("../node_modules/react-slick/lib");
-//   console.log("Internal deps:", Array.from(internal.keys()));
-//   console.log("External deps:", external);
-// }
-
-// main();
+async function main() {
+  const {internal, external} = await collectImports("./test/sample.js");
+  assert(setEquals(new Set(internal.keys()), new Set([
+    await resolve("./test/a", { basedir: "." }),
+    await resolve("./test/b.js", { basedir: "." }),
+    await resolve("./test/sample.js", { basedir: "." })
+  ])));
+  assert(setEquals(external, new Set(["Ea", "Eb"])))
+}
+if (require.main === module) {
+  main();
+}
