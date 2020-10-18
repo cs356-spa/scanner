@@ -1,0 +1,19 @@
+# Angular test targets
+https://angular.io/
+# "https://www.delta.com/", # Delta seems to have protection against crawler, causing an infinite redirect to self
+https://clarity.design/
+https://ng.ant.design/docs/introduce/en
+
+# Vue test targets
+https://vuejs.org/
+
+# React test targets
+# Dynamic extension based scan give concrete results (when NOT under headless, and extension is loaded)
+https://reactjs.org
+https://airbnb.com
+https://webpack.js.org
+# (Occasionally, sometimes not working) Only detecting React presence (old versions of React, likely before 0.15.x/15.x)
+https://facebook.com
+
+# Ember test targets
+https://emberjs.com
