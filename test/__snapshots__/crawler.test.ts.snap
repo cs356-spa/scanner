@@ -1,0 +1,83 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`crawler basic list of domains 1`] = `
+Array [
+  Object {
+    "domain": "https://airbnb.com",
+    "output": Object {
+      "react": Object {
+        "confidence": 1,
+        "isStatic": true,
+        "reasonURL": "https://a0.muscache.com/airbnb/static/packages/react-0e221225.js",
+        "version": "16.13.1",
+      },
+    },
+  },
+  Object {
+    "domain": "https://angular.io/",
+    "output": Object {
+      "angular": Object {
+        "confidence": 2,
+        "isStatic": true,
+        "reasonURL": "https://angular.io/",
+        "version": "10.1.3",
+      },
+    },
+  },
+  Object {
+    "domain": "https://emberjs.com",
+    "output": Object {
+      "ember": Object {
+        "confidence": 2,
+        "isStatic": false,
+        "reasonURL": "https://emberjs.com/",
+        "version": "3.16.3",
+      },
+    },
+  },
+  Object {
+    "domain": "https://facebook.com",
+    "output": Object {
+      "react": Object {
+        "confidence": 1,
+        "isStatic": true,
+        "reasonURL": "https://static.xx.fbcdn.net/rsrc.php/v3i7M54/yW/l/en_US/Sc3qJZQohzL.js?_nc_x=Ij3Wp8lg5Kz",
+        "version": "17.0.0-alpha.0-d95c4938d",
+      },
+    },
+  },
+  Object {
+    "domain": "https://reactjs.org",
+    "output": Object {
+      "react": Object {
+        "confidence": 1,
+        "isStatic": true,
+        "reasonURL": "https://reactjs.org/framework-5096ca5d206149498093.js",
+        "version": "17.0.0-rc.3",
+      },
+    },
+  },
+  Object {
+    "domain": "https://vuejs.org/",
+    "output": Object {
+      "vue": Object {
+        "confidence": 2,
+        "isStatic": false,
+        "reasonURL": "https://vuejs.org/",
+        "version": "2.6.12",
+      },
+    },
+  },
+  Object {
+    "domain": "https://webpack.js.org",
+    "output": Object {
+      "react": Object {
+        "confidence": 1,
+        "isStatic": true,
+        "reasonURL": "https://webpack.js.org/vendor.bundle.js",
+        "version": "16.13.1",
+      },
+    },
+  },
+]
+`;
