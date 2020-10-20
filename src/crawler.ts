@@ -1,18 +1,9 @@
 import * as path from 'path';
-import * as puppeteer from 'puppeteer';
-import { staticScanForSPAFramework, mergeDetectorOutput }  from './static_detector';
+import { Cluster } from 'puppeteer-cluster';
+import { staticScanForSPAFramework, mergeDetectorOutput, SpaDetectorOutput }  from './static_detector';
 
 const { dynamicScanForSPAFramework } = require("./dynamic_detector");
 const debug = require("debug")("spa");
-
-/**
- * Async wrapper to sleep for a while. Try `await sleep(1000)` to sleep for 1 second.
- * @param {number} ms Milliseconds to sleep.
- * @return {Promise<void>}
- */
-function sleep(ms) {
-  return new Promise(res => setTimeout(res, ms));
-}
 
 async function runOnPage(page, domain) {
   const sources: {url: string, content: string}[] = [];
@@ -56,57 +47,50 @@ async function runOnPage(page, domain) {
   const staticOutput = staticScanForSPAFramework(sources, new URL(domain).hostname);
   const dynamicOutput = await page.evaluate(dynamicScanForSPAFramework);
 
-  console.log(mergeDetectorOutput(staticOutput, dynamicOutput));
   debug(`Finish task for ${domain}`);
+  return mergeDetectorOutput(staticOutput, dynamicOutput);
 }
-
-const testDomains = [
-  // Angular test targets
-  "https://angular.io/",
-  // "https://www.delta.com/", // Delta seems to have protection against crawler, causing an infinite redirect to self.
-  "https://clarity.design/",
-  "https://ng.ant.design/docs/introduce/en",
-
-  // Vue test targets
-  "https://vuejs.org/",
-
-  // React test targets
-  // Dynamic extension based scan give concrete results (when NOT under headless, and extension is loaded)
-  "https://reactjs.org",
-  "https://airbnb.com",
-  "https://webpack.js.org",
-  // (Occasionally, sometimes not working) Only detecting React presence (old versions of React, likely before 0.15.x/15.x)
-  "https://facebook.com",
-
-  // Ember test targets
-  "https://emberjs.com"
-]
 
 async function createCustomBrowser() {
   const customArgs = [
     `--load-extension=${path.resolve("./extensions/react_devtools/")}`
   ];
-  const browser = await puppeteer.launch({
+  return {
     // defaultViewport: null,
     // executablePath: process.env.chrome,
     // headless: false, // WARNING: we have to make it NOT headless to get the extension to work! This is a sad compromise... See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
     ignoreDefaultArgs: ["--disable-extensions"],
     args: customArgs,
-  });
-  return browser;
+  };
 }
 
-export async function main() {
-  // const browser = await puppeteer.launch();
-  const browser = await createCustomBrowser();
-  const page = await browser.newPage();
-  for (const domain of testDomains) {
-    try {
-      await runOnPage(page, domain);
-    } catch (e) {
-      console.log(e);
-    }
-  }
-  debug("Shutting down browser...")
-  await browser.close();
+export async function main(domains: string[]) {
+  const browserArgs = await createCustomBrowser();
+  const cluster = await Cluster.launch({
+    concurrency: Cluster.CONCURRENCY_CONTEXT,
+    maxConcurrency: 50,
+    puppeteerOptions: browserArgs
+  });
+  console.log('starting browser...');
+
+  const results: {domain: string, output: SpaDetectorOutput}[] = [];
+  for (let domain of domains) {
+    cluster.queue(async ({ page }) => {
+      try {
+        results.push({
+          domain,
+          output: await runOnPage(page, domain)
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  };
+
+  await cluster.idle();
+  debug("Shutting down cluster...")
+  await cluster.close();
+  debug("Done");
+
+  return results.sort((a, b) => a.domain.localeCompare(b.domain));
 }
