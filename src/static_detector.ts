@@ -12,7 +12,7 @@ interface SpaInfo {
   isStatic: boolean
 }
 
-type SpaDetectorOutput = {
+export type SpaDetectorOutput = {
   [x in SpaType]: SpaInfo;
 } | {};
 
