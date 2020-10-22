@@ -6,6 +6,7 @@ import { writeFileSync } from "fs";
   const sites = await download();
   console.log(sites);
 
-  const results = main(sites.map(e => `https://${e.Domain}`).slice(0, 10));
+  const results = await main(sites.map(e => `https://${e.Domain}`).slice(0, 1000));
+  console.log("Got", results.length, "results");
   writeFileSync('output.json', JSON.stringify(results, null, 2));
 })();
