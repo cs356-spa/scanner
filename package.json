@@ -4,9 +4,10 @@
   "description": "",
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "start-prod": "ts-node src/index.ts",
+    "start-prod": "node .build/src/index.js",
     "test": "jest",
-    "tdd": "jest --watch"
+    "tdd": "jest --watch",
+    "build": "tsc"
   },
   "keywords": [],
   "license": "ISC",

@@ -6,3 +6,8 @@ Setup
 yarn
 yarn start
 ```
+
+# deployment
+
+docker build . -t llightex/cs356
+docker push llightex/cs356
