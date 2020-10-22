@@ -71,7 +71,6 @@ async function walkRecursive(filename: string, seen: Map<string, string>, extern
     }
     await Promise.all(internalDeps.map(source => walkRecursive(source, seen, externalDeps))); // All promises are run concurrently.
   } catch (e) {
-    console.log(e);
     debug(`Error during collect imports: ${e.message}`); // Try resolve as much as possible (definitely edge cases we do not resolve cleanly), so hide the errors
     return;
   }

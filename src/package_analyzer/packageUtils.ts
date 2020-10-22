@@ -1,11 +1,16 @@
 import { promises as fs } from "fs";
 import * as path from "path";
+import { promisify as p } from "util";
 
 import * as parser from "@babel/parser";
 import traverse from "@babel/traverse"; // default
 import * as t from "@babel/types";
-import { collectImports } from "./collect_imports";
 import makeDebug from "debug";
+import * as npm from "npm";
+
+import { collectImports } from "./collect_imports";
+import { enterTempDir } from "./util";
+
 const debug = makeDebug("packageUtils");
 
 const MIN_NOTABLE_STRING_LENGTH = 20;
@@ -112,13 +117,7 @@ export async function collectPackageNotableStrings(pathToModulePackageJson: stri
 
 type MatchResult = { matched: Set<string>, unmatched: Set<string>, extra: Set<string> }
 
-/**
- * TODO: consider making bundleContent a list, such it could be a list of potential chunks
- * @param bundleContent string content of a bundle
- * @param strs a list of strings to test if they appear in the bundle.
- */
-export async function testStringsOnBundle(bundleContent: string, strs: Set<string>): Promise<MatchResult> {
-  const bundleStrs = await collectNotableStrings(bundleContent, new Set(), Infinity);
+function testStringsOnBundleStrings(bundleStrs: Set<string>, strs: Set<string>): MatchResult {
   const matched = new Set<string>();
   const unmatched = new Set<string>();
   for (const s of strs) {
@@ -137,6 +136,17 @@ export async function testStringsOnBundle(bundleContent: string, strs: Set<strin
 }
 
 /**
+ * Testing a list of strings on a bundle's content. The output is similar to that of `testPackageNotableStringsOnBundle`
+ * TODO: consider making bundleContent a list, such it could be a list of potential chunks
+ * @param bundleContent string content of a bundle
+ * @param strs a list of strings to test if they appear in the bundle.
+ */
+export async function testStringsOnBundle(bundleContent: string, strs: Set<string>): Promise<MatchResult> {
+  const bundleStrs = await collectNotableStrings(bundleContent, new Set(), Infinity);
+  return testStringsOnBundleStrings(bundleStrs, strs);
+}
+
+/**
  * Output string match result of a bundle on a specific package.
  * If you want to supply past recorded package strings instead of package.json path (resulting in package reparsing), use `testStringsOnBundle` instead.
  * output.matched means string presenting in both the bundle and the package.
@@ -149,6 +159,76 @@ export async function testStringsOnBundle(bundleContent: string, strs: Set<strin
 export async function testPackageNotableStringsOnBundle(bundleContent: string, pathToModulePackageJson: string, mainOnly = false): Promise<MatchResult> {
   const strs = await collectPackageNotableStrings(pathToModulePackageJson, mainOnly);
   return await testStringsOnBundle(bundleContent, strs);
+}
+
+export type PackageStringsByVersionMap = { [version: string]: string[] };
+
+async function collectPackageNotableStringsIntoDict(dictToFill: PackageStringsByVersionMap, packageDirPath: string, version: string, limit: number): Promise<void> {
+  const packageJsonPath = path.join(packageDirPath, "package.json");
+  const stringSet = await collectPackageNotableStrings(packageJsonPath, false, limit);
+  dictToFill[version] = [...stringSet];
+}
+
+/**
+ * Automatically download packages of different versions (into an auto-remove temp dir) and extract out a string map per version.
+ * If a version does not exist, silently fail for that case and continue generate for the rest.
+ * @param packageName name of the package (on NPM)
+ * @param versions versions of interest to collect. Please ensure they are valid versions
+ * @param limit limit to the number of longest strings we should collect.
+ */
+export async function extractStringsFromPackageVersions(packageName: string, versions: string[], limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT): Promise<PackageStringsByVersionMap> {
+  const output = {};
+  await enterTempDir(async (tempDir) => {
+    debug(`Enter temp directory "${tempDir}"`);
+    const versionToInstallDirMap = new Map<string, string>();
+    debug(`npm load config`);
+    await p(npm.load)();
+    // await fs.writeFile(path.join(tempDir, ".npmrc"), "yes = true");
+    npm.config.set("yes", true); // This is stupid: "-y" flag does not work in the init command: I have to explicitly set it as part of the config (I have to go through the source code to do so...)
+    debug(`npm init`);
+    await p(npm.commands.init)([]);
+    // NPM has a lock thing, so still sequentially install all the packages.
+    for (const version of versions) {
+      const realPackageName = `${packageName}@${version}`;
+      const targetDirName = `${packageName}~${version}`;
+      const packageNameToInstall = `${targetDirName}@npm:${realPackageName}`; // NPM alias trick to install multiple packages at the same time.
+      debug(`npm install ${packageNameToInstall}`);
+      try {
+        await p(npm.commands.install)([packageNameToInstall]);
+      } catch (e) {
+        console.error(`>>> Failed to install ${realPackageName}:`)
+        console.log(e);
+      }
+      const targetDirPath = path.join(tempDir, "node_modules", targetDirName); // We are actually also in the right directory anyways though...
+      versionToInstallDirMap.set(version, targetDirPath);
+    }
+    debug(`Begin scanning for strings in each package.`);
+    const parallelScans: Promise<void>[] = [];
+    for (const version of versions) {
+      if (versionToInstallDirMap.has(version)) {
+        parallelScans.push(collectPackageNotableStringsIntoDict(output, versionToInstallDirMap.get(version)!, version, limit));
+      }
+    }
+    await Promise.all(parallelScans);
+  }, true); // Set to `true` if you want to auto remove temp directory
+  return output;
+}
+
+type PackageStringsMatchResult = { [version: string]: number };
+
+/**
+ * Test matches of strings inside a bundle across different possible package versions.
+ * @param bundleContent 
+ * @param stringsByVersion 
+ */
+export async function matchBundleWithPackageVersionStrings(bundleContent: string, stringsByVersion: PackageStringsByVersionMap): Promise<PackageStringsMatchResult> {
+  const bundleStrs = await collectNotableStrings(bundleContent, new Set(), Infinity);
+  const output = {};
+  for (const version in stringsByVersion) {
+    const matchResult = testStringsOnBundleStrings(bundleStrs, new Set(stringsByVersion[version]));
+    output[version] = matchResult.matched.size;
+  }
+  return output;
 }
 
 async function main() {
