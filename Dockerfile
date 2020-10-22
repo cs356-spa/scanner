@@ -8,5 +8,5 @@ RUN yarn build
 
 FROM buildkite/puppeteer
 WORKDIR /app
-COPY --from=build /app/package.json /app/yarn.lock /app/.build /app
+COPY --from=build /app/package.json /app/yarn.lock /app/.build /app/
 CMD yarn run start-prod
