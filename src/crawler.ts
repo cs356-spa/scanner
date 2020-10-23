@@ -1,4 +1,4 @@
-import * as path from 'path';
+// import * as path from 'path';
 import { Cluster } from 'puppeteer-cluster';
 import { staticScanForSPAFramework, mergeDetectorOutput, SpaDetectorOutput }  from './static_detector';
 
@@ -53,14 +53,18 @@ async function runOnPage(page, domain) {
 
 async function createCustomBrowser() {
   const customArgs = [
-    `--load-extension=${path.resolve("./extensions/react_devtools/")}`
+    '--disable-dev-shm-usage',
+    '--no-sandbox',
+    // `--load-extension=${path.resolve("./extensions/react_devtools/")}`
   ];
   return {
     // defaultViewport: null,
     // executablePath: process.env.chrome,
-    // headless: false, // WARNING: we have to make it NOT headless to get the extension to work! This is a sad compromise... See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
-    ignoreDefaultArgs: ["--disable-extensions"],
+    headless: true, // WARNING: we have to make it NOT headless to get the extension to work! This is a sad compromise... See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
+    // ignoreDefaultArgs: ["--disable-extensions"],
     args: customArgs,
+    product: 'chrome',
+    executablePath: 'google-chrome-stable'
   };
 }
 
@@ -81,8 +85,9 @@ export async function main(domains: string[]) {
           domain,
           output: await runOnPage(page, domain)
         });
+        console.log(domain);
       } catch (e) {
-        console.error(e);
+        // console.error(e);
       }
     });
   };

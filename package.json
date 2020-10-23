@@ -4,10 +4,10 @@
   "description": "",
   "scripts": {
     "start": "ts-node-dev src/index.ts",
-    "start-prod": "node .build/src/index.js",
+    "start-prod": "node dist/worker/bundle.js",
     "test": "jest",
     "tdd": "jest --watch",
-    "build": "tsc"
+    "build": "webpack"
   },
   "keywords": [],
   "license": "ISC",
@@ -29,11 +29,14 @@
     "resolve": "^1.17.0",
     "rimraf": "^3.0.2",
     "ts-jest": "^26.3.0",
+    "ts-loader": "^8.0.6",
     "ts-node": "^9.0.0",
     "ts-node-dev": "^1.0.0-pre.62",
-    "typescript": "^4.0.2"
+    "typescript": "^4.0.2",
+    "webpack": "^5.2.0"
   },
   "devDependencies": {
-    "@types/npm": "^2.0.31"
+    "@types/npm": "^2.0.31",
+    "webpack-cli": "^4.1.0"
   }
 }

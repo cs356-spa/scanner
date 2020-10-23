@@ -36,7 +36,9 @@ export const getCSV = async () => {
 /**
  * Gets and parses top site data.
  */
-export const download = async () => {
-  console.log(String(await getCSV()).substring(0, 1000));
-  return Papa.parse(String(await getCSV()), {header: true}).data as TopWebsiteData[];
+export const download = async (length: number) => {
+  return Papa.parse(String(await getCSV()), {
+    header: true,
+    preview: length
+  }).data as TopWebsiteData[];
 }
