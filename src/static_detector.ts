@@ -1,4 +1,6 @@
-type SpaType = "react"|"angular"|"angularjs"|"vue";
+// type SpaType = "react"|"angular"|"angularjs"|"vue";
+export const SPA_TYPES = ["react", "angular", "angularjs", "vue"] as const;
+export type SpaType = typeof SPA_TYPES[number];
 
 interface Source {
   url: string;
@@ -12,7 +14,7 @@ interface SpaInfo {
   isStatic: boolean
 }
 
-type SpaDetectorOutput = {
+export type SpaDetectorOutput = {
   [x in SpaType]: SpaInfo;
 } | {};
 
