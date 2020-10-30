@@ -16,6 +16,7 @@
     "acorn": "^8.0.4",
     "acorn-walk": "^8.0.0",
     "axios": "^0.20.0",
+    "axios~0.1.0": "npm:axios@^0.1.0",
     "cheerio": "^1.0.0-rc.3",
     "debug": "^4.2.0",
     "esprima": "^4.0.1",

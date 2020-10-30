@@ -5,10 +5,10 @@ const USAGE = `Generate and write a dictionary of strings contains in different 
 The format of output JSON file is { [version: string]: string[] }
 Usage:
 
-$ ts-node collect_version_strings.ts [packageName] [versionListDelimitedByComma] [pathToJsonFileToWrite]
+$ ts-node collect_version_strings.ts [pathToJsonFileToWrite] [packageName] [versionListDelimitedByComma]
 
 # Example
-$ ts-node collect_version_strings.ts react 16,15,0.14 ./react_strings.json
+$ ts-node collect_version_strings.ts ./react_strings.json react 16,15,0.14
 `;
 
 function logUsageAndExit() {
@@ -16,22 +16,28 @@ function logUsageAndExit() {
   process.exit(1);
 }
 
-if (process.argv.length < 5) {
+if (process.argv.length < 4) {
   logUsageAndExit();
 }
 
-const packageName = process.argv[2];
-const packageVersions = process.argv[3].split(",").map(s => s.trim());
-if (packageVersions.length === 0 || packageVersions.includes("")) {
-  logUsageAndExit();
-}
-const targetFile = process.argv[4].trim();
+const targetFile = process.argv[2].trim();
 if (targetFile === "") {
   logUsageAndExit();
 }
 
 async function main(): Promise<void> {
-  const output = await extractStringsFromPackageVersions(packageName, packageVersions, Infinity);
+  const packageName = process.argv[3];
+  let packageVersions: string[];
+  if (process.argv.length < 5) { // No given version, auto select versions
+    packageVersions = []; // 30 as an initial test starting point
+  } else {
+    packageVersions = process.argv[4].split(",").map(s => s.trim());
+    if (packageVersions.length === 0 || packageVersions.includes("")) {
+      logUsageAndExit();
+    }
+  }
+
+  const output = await extractStringsFromPackageVersions(packageName, packageVersions, Infinity); 
   const jsonOutput = JSON.stringify(output, null, 2); // TODO: replace this with JSON.stringify(output) is no formatting is necessary
   await fs.writeFile(targetFile, jsonOutput);
 }

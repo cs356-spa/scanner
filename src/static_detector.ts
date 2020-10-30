@@ -120,7 +120,7 @@ export function isFileLikelyFirstParty(fileURL: string, hostname: string): boole
 export function handleHTMLFile(output: SpaDetectorOutput, content: string, fileURL: string) {
   // Angular2 version directly from HTML file
   // https://github.com/angular/angular/issues/16283
-  const angular2VersionRegex = /ng\-version=['"]([0-9\.]+)['"]/;
+  const angular2VersionRegex = /ng\-version=['"]([0-9\.]+)['"]/i; // ignore case
   const angular2VersionResult = angular2VersionRegex.exec(content);
   if (angular2VersionResult && angular2VersionResult[1]) {
     mergeOutput(output, "angular", {
@@ -133,8 +133,8 @@ export function handleHTMLFile(output: SpaDetectorOutput, content: string, fileU
 
   // React rough detection
   // Below 2 actually also implies React version < 0.15.0 (aka React 15)
-  const reactDataRegex1 = /data\-reactid/; // only occurs before React 15, see https://stackoverflow.com/questions/17585787/whats-data-reactid-attribute-in-html
-  const reactDataRegex2 = /data\-reactroot/; // similar as before. https://github.com/kentcdodds/react-detector/blob/master/content-script.js
+  const reactDataRegex1 = /data\-reactid/i; // only occurs before React 15, see https://stackoverflow.com/questions/17585787/whats-data-reactid-attribute-in-html
+  const reactDataRegex2 = /data\-reactroot/i; // similar as before. https://github.com/kentcdodds/react-detector/blob/master/content-script.js
   if (reactDataRegex1.test(content) || reactDataRegex2.test(content)) {
     mergeOutput(output, "react", {
       reasonURL: fileURL,
