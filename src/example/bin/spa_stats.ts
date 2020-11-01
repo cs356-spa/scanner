@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import * as util from "util";
 import * as yargs from "yargs";
 import { parseCSV } from "../../top-sites";
 import { main as crawl } from "../../crawler";
@@ -46,6 +47,9 @@ async function main(): Promise<void> {
   
   console.log(perSiteOutputs);
   console.log(perSiteOutputs.length);
+
+  const weirdReactOutput: any[] = [];
+
   for (const spaOutput of perSiteOutputs) {
     const spaInfo = spaOutput.output;
     for (const SPA_TYPE of SPA_TYPES) {
@@ -59,12 +63,67 @@ async function main(): Promise<void> {
             spaVersionCount[SPA_TYPE].set(spaVersion, 0);
           }
           spaVersionCount[SPA_TYPE].set(spaVersion, spaVersionCount[SPA_TYPE].get(spaVersion)! + 1);
+
+          // Detection of aberrant React version:
+          if (SPA_TYPE === "react" && spaVersion.startsWith("0.")) {
+            weirdReactOutput.push(spaInfo[SPA_TYPE]);
+          }
         }
       }
     }
   }
   console.log(spaUseCount);
   console.log(spaVersionCount);
+  // Logging for weird React version numbers
+  if (weirdReactOutput.length > 0) {
+    console.log(">>> WEIRD React versions:");
+    console.log(util.inspect(weirdReactOutput, {showHidden: false, depth: null}));
+  }
 }
 
 main().catch(console.error);
+
+/*
+>>> WEIRD React versions:
+[
+  {
+    version: '0.2.1',
+    reasonURL: 'https://www.economist.com/engassets/_next/static/chunks/ca336c76f79e6301c475d274322d308e34e43749.e0bb5e2268a83ba1540e.js',
+    confidence: 1,
+    isStatic: true
+  },
+  {
+    version: '0.13.3',
+    reasonURL: 'https://www.fbi.gov/++plone++production/++unique++2020-09-16T02:24:29.864787/default.js',
+    confidence: 1,
+    isStatic: true
+  },
+  {
+    version: '0.0.1',
+    reasonURL: 'https://usa.kaspersky.com/gatsby-component---src-wms-templates-page-template-static-jsx-65777fa12df244db4d88.js',
+    confidence: 1,
+    isStatic: true
+  },
+  {
+    version: '0.8.2',
+    reasonURL: 'https://static.zdassets.com/web_widget/latest/vendors~web_widget.ca239eb7094b76c34e1a.chunk.js',
+    confidence: 1,
+    isStatic: true
+  },
+  {
+    version: '0.13.3',
+    reasonURL: 'https://www.rollingstone.com/wp-content/plugins/pmc-plugins/pmc-swiftype/assets/js/SwiftypeComponents.min.js?ver=2.0',
+    confidence: 1,
+    isStatic: true
+  },
+  {
+    version: '0.13.3',
+    reasonURL: 'https://variety.com/wp-content/plugins/pmc-plugins/pmc-swiftype/assets/js/SwiftypeComponents.min.js?ver=2.0',
+    confidence: 1,
+    isStatic: true
+  }
+]
+
+Manual investigation:
+While others are false positives, all above 0.13.3 are actually the CORRECT react versions they used!
+*/
