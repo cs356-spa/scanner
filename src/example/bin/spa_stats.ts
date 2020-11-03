@@ -126,4 +126,20 @@ main().catch(console.error);
 
 Manual investigation:
 While others are false positives, all above 0.13.3 are actually the CORRECT react versions they used!
+
+Updated: replacing the scanning with a new strategy, we detect a site using a version as old as 0.10.0:
+[
+  {
+    version: '0.10.0',
+    reasonURL: 'https://assets.acs.org/acs-bootstrap/v2.0/js/acs.min.js',
+    confidence: 1,
+    isStatic: true
+  },
+  {
+    version: '0.13.3',
+    reasonURL: 'https://www.fbi.gov/++plone++production/++unique++2020-09-16T02:24:29.864787/default.js',
+    confidence: 1,
+    isStatic: true
+  }
+]
 */
