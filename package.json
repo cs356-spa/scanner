@@ -4,6 +4,7 @@
   "description": "",
   "scripts": {
     "start": "ts-node-dev src/index.ts",
+    "aggregate": "ts-node-dev src/aggregate.ts",
     "start-prod": "ts-node src/index.ts",
     "test": "jest",
     "tdd": "jest --watch"
