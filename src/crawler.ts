@@ -30,7 +30,7 @@ async function runOnPage(page, domain) {
   // await page.setRequestInterception(true); // Used to inject custom scripts
   page.on("response", async response => {
     try {
-      const content = (await response.text()).toLowerCase();
+      const content = await response.text(); // .toLowerCase(); // Don't do this!!!
       sources.push({ url: response.url(), content })
     } catch {
       // console.log(`x Response read failed for ${response.url()}`);
