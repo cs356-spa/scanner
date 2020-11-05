@@ -147,16 +147,77 @@ export function handleHTMLFile(output: SpaDetectorOutput, content: string, fileU
 const CONTEXT_LOOKAROUND_OFFSET = 500;
 // This might either match to React of ReactDOM, but either is fine.
 const REACT_LOOKALIKE_IDS = [
-  // Lifecycle names
-  "componentDidMount", "componentWillMount",
-  // Hooks
-  "useState", "useEffect",
-  // Secret internals
-  "DO_NOT_USE_OR_YOU_WILL_BE_FIRED",
+  // // Lifecycle names
+  // "componentDidMount", "componentWillMount",
+  // // Hooks
+  // "useState", "useEffect",
+  // // Secret internals
+  // "DO_NOT_USE_OR_YOU_WILL_BE_FIRED",
+  // This is confirmed to be present next to React version from 0.5.0 to 0.13.3
+  // For example:
+  // 0.5.0: https://github.com/facebook/react/blob/f756cb3d9c504b3759fb4cc4f5aec1d1e4d31ee8/src/core/React.js#L63-L69
+  // 0.12.2: https://github.com/facebook/react/blob/1e1f02a83ab2972de72acab90b7cf4769adba9e1/src/browser/ui/React.js#L131-L182
+  // 0.13.3: https://github.com/facebook/react/blob/668d6a3fededd5e7babd533d5538982eb1d496fa/src/browser/ui/React.js#L97-L146
+  "CurrentOwner",
   // Likely will work in a way similar to that devtools (part of the renderer details). Example: https://webpack.js.org/vendor.bundle.js
   "rendererPackageName"
   // TODO: find more possible identifiers based on older versions of React bundles.
 ];
+// For Vue 2. See discussion below.
+const VUE_2_LOOKALIKE_IDS = [
+  "$isServer",
+  "$ssrContext",
+  "FunctionalRenderContext"
+];
+// For AngularJS. These are property names that will be injected to `window.angular`. If they are all present right next to each other, very likely to be using AngularJS
+const ANGULARJS_LOOKALIKE_IDS = [
+  "full",
+  "major",
+  "minor",
+  "dot",
+  "codeName"
+];
+
+/**
+ * @param content target content to search a regex on
+ * @param regex regex for version extraction.
+ * @param nearbyPatterns a list of strings that ANY of which, if found near the matched result, means we have found the right regex matched result.
+ */
+function searchWithRegexAndConfirmByAnyNearbyPattern(content: string, regex: RegExp, nearbyPatterns: string[]): string | null {
+  let result;
+  while ((result = regex.exec(content)) !== null) {
+    const version = result[0].replace(/["'`]/g, ""); // drop wrapping quotes. I could have used lookahead/lookbehind but unsure about lookbehind support in JS yet.
+    const contextSubstringFromContent = content.substring(result.index-CONTEXT_LOOKAROUND_OFFSET, result.index+CONTEXT_LOOKAROUND_OFFSET); // take a substring around the target index of found version string
+    for (const lookAlikeId of nearbyPatterns) {
+      if (contextSubstringFromContent.toLowerCase().includes(lookAlikeId.toLowerCase())) { // Somehow for whatever reason context string is actually lowercase... (it is because I messed up before lols)
+        return version;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * @param content target content to search a regex on
+ * @param regex regex for version extraction.
+ * @param nearbyPatterns a list of strings that ALL of which, if found near the matched result, means we have found the right regex matched result.
+ */
+function searchWithRegexAndConfirmByAllNearbyPattern(content: string, regex: RegExp, nearbyPatterns: string[]): string | null {
+  let result;
+  regexLoop:
+  while ((result = regex.exec(content)) !== null) {
+    const version = result[0].replace(/["'`]/g, ""); // drop wrapping quotes. I could have used lookahead/lookbehind but unsure about lookbehind support in JS yet.
+    const contextSubstringFromContent = content.substring(result.index-CONTEXT_LOOKAROUND_OFFSET, result.index+CONTEXT_LOOKAROUND_OFFSET); // take a substring around the target index of found version string
+    for (const lookAlikeId of nearbyPatterns) {
+      if (!contextSubstringFromContent.toLowerCase().includes(lookAlikeId.toLowerCase())) { // Somehow for whatever reason context string is actually lowercase... (it is because I messed up before lols)
+        continue regexLoop; // Break outside!
+      }
+    }
+    return version;
+  }
+  return null;
+}
+
 /**
  * @param {SpaDetectorOutput} output
  * @param {string} content 
@@ -176,21 +237,47 @@ export function handleJSFile(output: SpaDetectorOutput, content: string, fileURL
   }
   // Special strategy: Scan for a version string pattern. For each match, scan neighboring 1000 strings to see if React-like strings appear.
   const reactVersionRegex = /(?:"|'|`)(?:0|1[0-7])\.[0-9]*\.[0.9]*[^"'`]*(?:"|'|`)/g; // Idea: either starts with 0.x.x, or (10 to 17).x.x. Must be immediately wrapped by a string marker.
-  let reactVersionResult;
-  while ((reactVersionResult = reactVersionRegex.exec(content)) !== null) {
-    const version = reactVersionResult[0].replace(/["'`]/g, ""); // drop wrapping quotes. I could have used lookahead/lookbehind but unsure about lookbehind support in JS yet.
-    const contextSubstringFromContent = content.substring(reactVersionResult.index-CONTEXT_LOOKAROUND_OFFSET, reactVersionResult.index+CONTEXT_LOOKAROUND_OFFSET);
-    for (const lookAlikeId of REACT_LOOKALIKE_IDS) {
-      if (contextSubstringFromContent.toLowerCase().includes(lookAlikeId.toLowerCase())) { // Somehow for whatever reason context string is actually lowercase...
-        mergeOutput(output, "react", {
-          version,
-          reasonURL: fileURL,
-          confidence: ConfidenceLevel.MEDIUM, // We are less sure about this.
-          isStatic: true,
-        });
-        break;
-      }
-    }
+  const reactVersion = searchWithRegexAndConfirmByAnyNearbyPattern(content, reactVersionRegex, REACT_LOOKALIKE_IDS);
+  if (reactVersion !== null) {
+    mergeOutput(output, "react", {
+      version: reactVersion,
+      reasonURL: fileURL,
+      confidence: ConfidenceLevel.MEDIUM, // We are less sure about this.
+      isStatic: true,
+    });
+  }
+
+  // Since sometimes Vue global namespace is hidden (example: https://9gag.com), we better implement Vue static analysis.
+  // From samples such as https://9gag.com/s/fab0aa49/98549adbcf1b41cd36713316980d65f5ced8af12/static/dist/es8/web/js/vendor.js
+  // which corresponds to https://github.com/vuejs/vue/blob/52719ccab8fccffbdf497b96d3731dc86f04c1ce/src/core/index.js#L20-L24
+  // We can rely on keyword "$isServer" (or "FunctionalRenderContext") existance to ensure we are seeing the right version.
+  // $isServer is added in early 2016, before Vue 2.0: https://github.com/vuejs/vue/commit/354ea616b5ec4826e23a88465e404fd3b382d9f4
+  // and it is seen right next to version exactly at 2.0.0 release: https://github.com/vuejs/vue/blob/156cfb9892d3359d548e27abf5d8b78b421a5a92/src/core/index.js
+  // FunctionalRenderContext is added in 2018.
+  // Historically, Vue started to gain popularity after this tweet: https://twitter.com/taylorotwell/status/590281695581982720
+  // which dates back to 2015. Vue 2 started in 2016, so it would be reasonable to only handle Vue 2 cases only.
+  // Vue 3 has just released, yet too new such that we don't necessarily need to worry about it yet. (It's much harder to find Vue 3 version unfortunately...)
+  const vueVersionRegex = /(?:"|'|`)2\.[0-9]*\.[0.9]*[^"'`]*(?:"|'|`)/g; // Vue 2 only.
+  const vueVersion = searchWithRegexAndConfirmByAnyNearbyPattern(content, vueVersionRegex, VUE_2_LOOKALIKE_IDS);
+  if (vueVersion !== null) {
+    mergeOutput(output, "vue", {
+      version: vueVersion,
+      reasonURL: fileURL,
+      confidence: ConfidenceLevel.MEDIUM, // We are less sure about this.
+      isStatic: true,
+    });
+  }
+
+  // For AngularJS. One difference is that we require ALL nearby patterns found.
+  const angularJSVersionRegex = /(?:"|'|`)1\.[0-9]*\.[0.9]*[^"'`]*(?:"|'|`)/g; // AngularJS 1.x only
+  const angularJSVersion = searchWithRegexAndConfirmByAllNearbyPattern(content, angularJSVersionRegex, ANGULARJS_LOOKALIKE_IDS); // NOTICE: this is ALL, NOT ANY!
+  if (angularJSVersion !== null) {
+    mergeOutput(output, "angularjs", {
+      version: angularJSVersion,
+      reasonURL: fileURL,
+      confidence: ConfidenceLevel.MEDIUM, // We are less sure about this.
+      isStatic: true,
+    });
   }
 }
 
