@@ -1,11 +1,15 @@
-// import * as path from 'path';
+import * as fs from "fs";
 import { Cluster } from 'puppeteer-cluster';
-import { staticScanForSPAFramework, mergeDetectorOutput, SpaDetectorOutput }  from './static_detector';
+import { staticScanForSPAFramework, mergeDetectorOutput, SpaDetectorOutput, isBundledFileStrict }  from './static_detector';
+import { parseCSV } from "./top-sites";
 
 const { dynamicScanForSPAFramework } = require("./dynamic_detector");
 const debug = require("debug")("spa");
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+const DEBUG_DISPLAY_NUM_SITES_WITH_BUNDLE = true;
+let numSitesWithBundle = 0;
 
 async function runOnPage(page, domain) {
   const sources: {url: string, content: string}[] = [];
@@ -68,6 +72,13 @@ async function runOnPage(page, domain) {
   // Catch the potential case where dynamic evaluation fails.
   const dynamicOutput = await page.evaluate(dynamicScanForSPAFramework).catch(() => ({}));
 
+  if (DEBUG_DISPLAY_NUM_SITES_WITH_BUNDLE) {
+    const hasBundledFile = sources.reduce((acc, s) => acc || isBundledFileStrict(s), false);
+    if (hasBundledFile) {
+      numSitesWithBundle++;
+    }
+  }
+
   debug(`Finish task for ${domain}`);
   const output = mergeDetectorOutput(staticOutput, dynamicOutput);
 
@@ -127,5 +138,28 @@ export async function main(domains: string[]) {
   await cluster.close();
   debug("Done");
 
+  if (DEBUG_DISPLAY_NUM_SITES_WITH_BUNDLE) {
+    console.log(`>>> ${numSitesWithBundle}/${domains.length} sites has bundled file`);
+  }
+
   return results.sort((a, b) => a.domain.localeCompare(b.domain));
+}
+
+/**
+ * Using this comparison, we can use this file both as a module AND as a running file.
+ * Usage: ts-node ./crawler.ts ./example/top_100.csv
+ */
+if (require.main === module) {
+  if (process.argv.length < 3) {
+    console.error("Error: please provide filename of domains");
+  }
+  const domainCSVFilename = process.argv[2];
+  const domainCSVRawContent = fs.readFileSync(domainCSVFilename, "utf8");
+  const domains = parseCSV(domainCSVRawContent);
+
+  // TODO: implement read csv file. need PR master merge.
+  const result = main(domains.map(d => `http://${d.Domain}`));
+  result.then(res => {
+    console.log(`>>> In total ${res.length} sites successfully scanned to some extent`);
+  })
 }

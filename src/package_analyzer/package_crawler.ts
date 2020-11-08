@@ -10,10 +10,54 @@ const debug = require("debug")("pkg");
 // FOR DEBUGGING: If set to true, will display match counts of different package versions if we decide the package is found.
 const DISPLAY_MATCH_VERSION_STATS = false;
 // FOR DEBUGGING: check the actual jquery versions, a good example to evaluate if our detection is good enough.
-const DISPLAY_REAL_JQUERY_VERSION_IF_PRESENT = false;
-const JQUERY_DEBUG_STATS = {};
+const DISPLAY_REAL_JQUERY_VERSION_IF_PRESENT = true;
+const JQUERY_DEBUG_STATS: { [domain: string]: string } = {};
 // Minimum strings to appear in a file such that we consider a package of a certain version is found.
 const MIN_MATCH_STRING_COUNT = 3;
+
+function validateForJQuery(domains: string[], results: PackageVersionCollector): void {
+  // TODO: Urgh... This spaghetti code between hostname and domain names...
+  const hostnames = domains.map(d => new URL(d).hostname);
+
+  const jqueryResults: { [domain: string]: string } = {};
+  for (const version in (results["jquery"] || {})) {
+    for (const hostname of results["jquery"][version].keys()) {
+      if (!(hostname in jqueryResults)) {
+        jqueryResults[hostname] = version;
+      }
+    }
+  }
+
+  const falsePositives: { [domain: string]: string } = {};
+  const falseNegatives: { [domain: string]: string } = {};
+  const bothFound: { [domain: string]: [string, string] } = {}; // [ predicted, actual ]
+
+  for (const hostname of hostnames) {
+    if (hostname in JQUERY_DEBUG_STATS) {
+      if (hostname in jqueryResults) {
+        // Both found
+        bothFound[hostname] = [jqueryResults[hostname], JQUERY_DEBUG_STATS[hostname]];
+      } else {
+        // False negative
+        falseNegatives[hostname] = JQUERY_DEBUG_STATS[hostname];
+      }
+    } else if (hostname in jqueryResults) {
+      falsePositives[hostname] = jqueryResults[hostname];
+    }
+  }
+
+  const serializedJson = JSON.stringify({
+    falsePositives,
+    falseNegatives,
+    bothFound
+  }, null, 2);
+
+  fs.writeFileSync("./jquery_general_classifier.json", serializedJson);
+
+  console.log(`>>> jQuery both found: ${Object.keys(bothFound).length}`);
+  console.log(`>>> jQuery maybe false positives: ${Object.keys(falsePositives).length}`);
+  console.log(`>>> jQuery maybe false negatives: ${Object.keys(falseNegatives).length}`);
+}
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -55,7 +99,7 @@ type PackageStringsByVersionsToScan = {
 
 type PackageVersionCollector = {
   [packageName: string]: {
-    [version: string]: Map<string, Set<string>> // List of hosts to ssource urls mapping that are most likely with this version.
+    [version: string]: Map<string, Set<string>> // List of hosts to source urls mapping that are most likely with this version.
   }
 }
 
@@ -83,6 +127,7 @@ const PACKAGE_STRINGS_BY_VERSION_JSON_FILENAMES = [
   "./data/axios_strings.json",
   "./data/moment_strings.json",
   "./data/uuid_strings.json",
+  "./data/bluebird_strings.json",
   "./data/core_js_strings.json",
   "./data/jquery_strings.json"
 ]
@@ -180,9 +225,11 @@ async function runOnPage(page, domain, collector: PackageVersionCollector) {
 
   debug(`Navigating to ${domain}`);
   // Racing between networkidle2 and a given timeout. If wait for TOO long, page explodes under puppeteer...
-  await Promise.race([page.goto(domain, {waitUntil: "networkidle2"}), sleep(10000)])
+  await Promise.race([page.goto(domain, {waitUntil: "networkidle2"}), sleep(10000)]);
 
-  staticScanForPackage(sources, new URL(domain).hostname, PACKAGE_STRINGS_BY_VERSION, collector);
+  const hostname = new URL(domain).hostname;
+
+  staticScanForPackage(sources, hostname, PACKAGE_STRINGS_BY_VERSION, collector);
 
   debug(`Finish task for ${domain}`);
 
@@ -208,7 +255,7 @@ async function runOnPage(page, domain, collector: PackageVersionCollector) {
         }
       });
       if (jqueryVersion) {
-        JQUERY_DEBUG_STATS[domain] = jqueryVersion;
+        JQUERY_DEBUG_STATS[hostname] = jqueryVersion as string;
       }
     } catch (_e) {}
   }
@@ -260,12 +307,13 @@ export async function main(domains: string[]) {
   debug("Done");
 
   if (DISPLAY_REAL_JQUERY_VERSION_IF_PRESENT) {
-    console.log(">> Collected jQuery actual versions from dynamic eval:");
-    consoleLogFull(JQUERY_DEBUG_STATS);
+    validateForJQuery(domains, resultCollector);
+    // console.log(">> Collected jQuery actual versions from dynamic eval:");
+    // consoleLogFull(JQUERY_DEBUG_STATS);
   }
-  console.log(">> Collected analyzer result:");
+  // console.log(">> Collected analyzer result:");
   // TODO: consider writing this result to a file.
-  consoleLogFull(resultCollector);
+  // consoleLogFull(resultCollector);
   return resultCollector;
 }
 
@@ -284,3 +332,134 @@ if (require.main === module) {
   // TODO: implement read csv file. need PR master merge.
   main(domains.map(d => `http://${d.Domain}`));
 }
+
+/*
+>>> jQuery both found: 280
+>>> jQuery maybe false positives: 38
+>>> jQuery maybe false negatives: 124
+
+For all the false positives:
+{
+  jquery: {
+    '3.5.0': Map {
+      'time.com' => Set { 'https://time.com/dist/homepage.js' },
+      'pbs.org' => Set { 'https://www.pbs.org/static/js/jquery.80aa4f81ff02.js' },
+      'theverge.com' => Set {
+        'https://cdn.vox-cdn.com/packs/js/concert_ads-3fcfcfa084e39e150eed.js',
+        'https://cdn.vox-cdn.com/packs/js/chorus-19b2f7391c56f9a3c59e.js'
+      },
+      'giphy.com' => Set {
+        'https://giphy.com/static/dist/desktopEntry.efff3d02.bundle.js'
+      },
+      'umn.edu' => Set {
+        'https://twin-cities.umn.edu/sites/twin-cities.umn.edu/files/js/js_pI-bZgBiFdXFyXVwPNwIof2C3JhpSzpZTcp7AWcaq90.js'
+      },
+      'vox.com' => Set {
+        'https://cdn.vox-cdn.com/packs/js/concert_ads-3fcfcfa084e39e150eed.js',
+        'https://cdn.vox-cdn.com/packs/js/chorus-19b2f7391c56f9a3c59e.js'
+      },
+      'history.com' => Set {
+        'https://www.history.com/build/desktop/vendors~about-detail~activate~blog-article~blog-author-landing~blog-category-landing~blog-landing~bl~52b8d3e6.6d96529f9a68ebbf38f5.js'
+      },
+      'calendly.com' => Set {
+        'https://assets.calendly.com/packs/js/vendors-landing-c673fcfa59e42144c0ba.chunk.js'
+      },
+      'dol.gov' => Set {
+        'https://www.dol.gov/sites/dolgov/files/js/js_eBHF4WLkx5G3n0i5AFFoC0Z19nJPoUE_9ZqJic0RskY.js'
+      },
+      'georgetown.edu' => Set {
+        'https://www.georgetown.edu/wp-content/themes/georgetown/pattern_lab/source/js/vendor/jquery.min.js?ver=1.0.291'
+      }
+    },
+    '1.11.0': Map {
+      'allaboutcookies.org' => Set {
+        'https://www.allaboutcookies.org/files/js/jquery-1.10.2.js'
+      },
+      'independent.co.uk' => Set {
+        'https://datawrapper.dwcdn.net/lib/vendor/jquery.min.0f23f82b.js'
+      },
+      'techcrunch.com' => Set { 'https://cdn.parsely.com/keys/techcrunch.com/p.js' },
+      'economist.com' => Set { 'https://cdn.parsely.com/keys/economist.com/p.js' },
+      'utoronto.ca' => Set {
+        'https://www.utoronto.ca/sites/default/files/js/js_rwJOw8atmox9XV3v8iLC0A-YAmKyx85XDT2dIASfdKg.js'
+      },
+      'redhat.com' => Set {
+        'https://www.redhat.com/sites/default/files/advagg_js/js__wNlHEsLALTzEeRd_J9pulEt9uCxu8YHllP4b4mAWT2M__ShOlrFV-yrfo5P33yPouJsZy9x5O1CLZZd726Dd7GMY__uaCwYofnUZLAnB7x3Q6WyVKHfqU6f9iB6Wi31ydea6c.js'
+      },
+      'qz.com' => Set {
+        'https://datawrapper.dwcdn.net/lib/vendor/jquery.min.0f23f82b.js'
+      },
+      'pcworld.com' => Set {
+        'https://www.pcworld.com/www/js/jquery/jquery-1.10.2.min.js'
+      }
+    },
+    '2.1.2': Map {
+      'soundcloud.com' => Set { 'https://a-v2.sndcdn.com/assets/1-d22702e9-3.js' }
+    },
+    '1.11.2': Map {
+      'npr.org' => Set { 'https://cdn.optimizely.com/js/11107397707.js' },
+      'techcrunch.com' => Set {
+        'https://plugin.mediavoice.com/mediaconductor/mc.js?ver=20201103'
+      },
+      'mailchi.mp' => Set { 'https://cdn.optimizely.com/js/8896740779.js' },
+      'economist.com' => Set { 'https://cdn.tinypass.com/api/tinypass.min.js' },
+      'newscientist.com' => Set {
+        'https://www.newscientist.com/build/js/jquery.js?ver=724b2f23b476d3e322faa525464897ebad94fc63'
+      },
+      'thedailybeast.com' => Set { 'https://cdn.tinypass.com/api/tinypass.min.js' },
+      'history.com' => Set { 'https://cdn.optimizely.com/js/129701606.js' },
+      'bostonglobe.com' => Set { 'https://cdn.blueconic.net/bostonglobemedia.js' },
+      'wikidot.com' => Set {
+        'http://d3g0gp89917ko0.cloudfront.net/v--3e3a6f7dbcc9/common--javascript/init.combined.js'
+      },
+      'reverbnation.com' => Set {
+        'https://gp1.wac.edgecastcdn.net/802892/production_static/20201029094513/assets/v3_common.js'
+      },
+      'georgetown.edu' => Set {
+        'https://www.georgetown.edu/wp-includes/js/jquery/jquery.js?ver=1.12.4-wp',
+        'https://assets.juicer.io/embed.js'
+      }
+    },
+    '3.3.0': Map {
+      'umich.edu' => Set {
+        'https://umich.edu/skins/um2013/scripts/skin.js?1586353630'
+      }
+    },
+    '1.12.0': Map {
+      'census.gov' => Set {
+        'https://www.census.gov/etc.clientlibs/clientlibs/granite/jquery.js'
+      }
+    },
+    '3.0.0': Map {
+      'thedailybeast.com' => Set {
+        'https://assets.thedailybeast.com/static/js/vendors~cheatsheet~crossword~halffull~homepage~listen~membership~search~story~wrap.a16a1111.chunk.js'
+      },
+      'biomedcentral.com' => Set {
+        'https://www.biomedcentral.com/static/js/jquery-220afd743d.js'
+      },
+      'usps.com' => Set {
+        'https://www.usps.com/global-elements/footer/script/jquery-3.2.1.js'
+      },
+      'lww.com' => Set {
+        'https://cdn.evgnet.com/beacon/lww/engage/scripts/evergage.min.js'
+      },
+      'qualtrics.com' => Set {
+        'https://www.qualtrics.com/assets/dist/js/libraries/jquery-3.4.0.min.js'
+      }
+    },
+    '1.8.2': Map {
+      'aliexpress.com' => Set {
+        'https://assets.alicdn.com/g/ae-fe/header-ui/0.0.14/src/ae-header.js?v=8'
+      },
+      'hubspot.com' => Set {
+        'https://cdn-3.convertexperiments.com/js/10031559-1003891.js'
+      }
+    },
+    '1.5.1': Map {
+      'guardian.co.uk' => Set {
+        'https://assets.guim.co.uk/javascripts/e9b489721cc44ed8e9b4/graun.standard.js' // Only this one is FALSE, as it is using a library called https://github.com/ded/bonzo that emulated jQuery's selector engine.
+      }
+    }
+  }
+}
+*/
