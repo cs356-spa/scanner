@@ -1,5 +1,5 @@
 import { promises as fs } from "fs";
-import { matchBundleWithPackageVersionStrings, PackageStringsByVersionMap } from "../packageUtils";
+import { matchBundleWithPackageVersionStrings, PackageStringsByVersionMapWithInfo } from "../packageUtils";
 
 const USAGE = `Output number of matched strings on different package versions inside of a bundle.
 Usage:
@@ -25,9 +25,9 @@ const versionStringsPath = process.argv[3];
 
 async function main(): Promise<void> {
   const versionStringsContent = await fs.readFile(versionStringsPath, "utf8");
-  const versionStrings: PackageStringsByVersionMap = JSON.parse(versionStringsContent);
+  const versionStrings: PackageStringsByVersionMapWithInfo = JSON.parse(versionStringsContent);
   const bundleContent = await fs.readFile(bundlePath, "utf8");
-  console.log(await matchBundleWithPackageVersionStrings(bundleContent, versionStrings));
+  console.log(await matchBundleWithPackageVersionStrings(bundleContent, versionStrings.versions));
 }
 
 main().catch(console.error);
