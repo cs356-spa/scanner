@@ -1,4 +1,4 @@
-import * as path from 'path';
+// import * as path from 'path';
 import { Cluster } from 'puppeteer-cluster';
 import { staticScanForSPAFramework, mergeDetectorOutput, SpaDetectorOutput }  from './static_detector';
 
@@ -30,7 +30,7 @@ async function runOnPage(page, domain) {
   // await page.setRequestInterception(true); // Used to inject custom scripts
   page.on("response", async response => {
     try {
-      const content = (await response.text()).toLowerCase();
+      const content = await response.text(); // .toLowerCase(); // Don't do this!!!
       sources.push({ url: response.url(), content })
     } catch {
       // console.log(`x Response read failed for ${response.url()}`);
@@ -82,15 +82,18 @@ async function runOnPage(page, domain) {
 
 async function createCustomBrowser() {
   const customArgs = [
-    `--load-extension=${path.resolve("../extensions/react_devtools/")}`,
-    '--disable-dev-shm-usage'
+    '--disable-dev-shm-usage',
+    '--no-sandbox',
+    // `--load-extension=${path.resolve("./extensions/react_devtools/")}`
   ];
   return {
     // defaultViewport: null,
     // executablePath: process.env.chrome,
-    // headless: false, // WARNING: we have to make it NOT headless to get the extension to work! This is a sad compromise... See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
-    ignoreDefaultArgs: ["--disable-extensions"],
+    headless: true, // WARNING: we have to make it NOT headless to get the extension to work! This is a sad compromise... See https://bugs.chromium.org/p/chromium/issues/detail?id=706008#c5
+    // ignoreDefaultArgs: ["--disable-extensions"],
     args: customArgs,
+    product: 'chrome',
+    executablePath: 'google-chrome-stable'
   };
 }
 
@@ -104,13 +107,15 @@ export async function main(domains: string[]) {
   console.log('starting browser...');
 
   const results: {domain: string, output: SpaDetectorOutput}[] = [];
-  for (let domain of domains) {
+  for (let i in domains) {
+    const domain = domains[i];
     cluster.queue(async ({ page }) => {
       try {
         results.push({
           domain,
           output: await runOnPage(page, domain)
         });
+        console.log(domain, i, domains.length);
       } catch (e) {
         console.error(`>>> on domain "${domain}"`, e);
       }

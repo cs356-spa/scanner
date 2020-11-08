@@ -7,6 +7,7 @@ import traverse from "@babel/traverse"; // default
 import * as t from "@babel/types";
 import makeDebug from "debug";
 import * as npm from "npm";
+import * as rm from "rimraf";
 
 import { collectImports } from "./collect_imports";
 import { enterTempDir } from "./util";
@@ -31,8 +32,9 @@ function popShortestStringFromSet(set: Set<string>): void {
  * @param content 
  * @param pastSet a set containing past strings to allow incremental addition to an existing set.
  * @param limit Limit interesting strings to top N longest
+ * @param debugFilename filename for debugging purposes
  */
-export function collectNotableStrings(content: string, pastSet = new Set<string>(), limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT): Set<string> {
+export function collectNotableStrings(content: string, pastSet = new Set<string>(), limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT, debugFilename = ""): Set<string> {
   const strs = pastSet;
   // TODO: refer to this: https://github.com/jamiebuilds/babel-handbook/blob/master/translations/en/plugin-handbook.md
   try {
@@ -57,7 +59,11 @@ export function collectNotableStrings(content: string, pastSet = new Set<string>
     });
   } catch (e) {
     debug(`Error during notable string collection: ${e.message}`);
+    if (debugFilename.length > 0) {
+      debug(`  at file ${debugFilename}`);
+    }
     /* Might error out when the file is NOT a JS file, or with unrecognized syntax by Babel that requires option tweaks. */
+    /* JSON might also happen: outmost JSON might be thought to be representing scope and thus making object notation invalid */
   }
   return strs;
 }
@@ -109,15 +115,20 @@ export async function collectSourcePathsFromNodeModule(pathToModulePackageJson: 
 export async function collectPackageNotableStrings(pathToModulePackageJson: string, mainOnly = false, limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT): Promise<Set<string>> {
   const sources = await collectSourcePathsFromNodeModule(pathToModulePackageJson, mainOnly);
   const strs = new Set<string>();
-  for (const content of sources.values()) {
-    collectNotableStrings(content, strs, limit);
+  for (const [filename, content] of sources.entries()) {
+    collectNotableStrings(content, strs, limit, filename);
   }
   return strs;
 }
 
 type MatchResult = { matched: Set<string>, unmatched: Set<string>, extra: Set<string> }
 
-function testStringsOnBundleStrings(bundleStrs: Set<string>, strs: Set<string>): MatchResult {
+/**
+ * Testing a list of strings on a bundle's strings.
+ * @param bundleStrs string set from bundle
+ * @param strs list of strings interesting
+ */
+export function testStringsOnBundleStrings(bundleStrs: Set<string>, strs: Set<string>): MatchResult {
   const matched = new Set<string>();
   const unmatched = new Set<string>();
   for (const s of strs) {
@@ -162,6 +173,11 @@ export async function testPackageNotableStringsOnBundle(bundleContent: string, p
 }
 
 export type PackageStringsByVersionMap = { [version: string]: string[] };
+export type PackageStringsByVersionMapWithInfo = {
+  packageName: string;
+  versionOrder: string[]; // Has to keep this: otherwise we will have NO idea about the order on JSON.parse! (does not keep order)
+  versions: PackageStringsByVersionMap;
+};
 
 async function collectPackageNotableStringsIntoDict(dictToFill: PackageStringsByVersionMap, packageDirPath: string, version: string, limit: number): Promise<void> {
   const packageJsonPath = path.join(packageDirPath, "package.json");
@@ -176,8 +192,9 @@ async function collectPackageNotableStringsIntoDict(dictToFill: PackageStringsBy
  * @param versions versions of interest to collect. Please ensure they are valid versions
  * @param limit limit to the number of longest strings we should collect.
  */
-export async function extractStringsFromPackageVersions(packageName: string, versions: string[], limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT): Promise<PackageStringsByVersionMap> {
-  const output = {};
+export async function extractStringsFromPackageVersions(packageName: string, versions: string[] = [], limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT): Promise<PackageStringsByVersionMapWithInfo> {
+  const versionsOutput: PackageStringsByVersionMap = {};
+  const installedVersions: string[] = []; // some versions can fail unfortunately...
   await enterTempDir(async (tempDir) => {
     debug(`Enter temp directory "${tempDir}"`);
     const versionToInstallDirMap = new Map<string, string>();
@@ -185,8 +202,13 @@ export async function extractStringsFromPackageVersions(packageName: string, ver
     await p(npm.load)();
     // await fs.writeFile(path.join(tempDir, ".npmrc"), "yes = true");
     npm.config.set("yes", true); // This is stupid: "-y" flag does not work in the init command: I have to explicitly set it as part of the config (I have to go through the source code to do so...)
+    npm.config.set("no-optional", true);
+    npm.config.set("ignore-scripts", true); // Ignore postinstall build scripts... e.g. old jquery uses jsdom that uses a bad version of contextify that no longer builds
     debug(`npm init`);
     await p(npm.commands.init)([]);
+    if (versions.length == 0) {
+      versions = await extractVersionsToSample(packageName, Infinity, true); // TODO: change this Infinity to other values if we want to create a smaller sample.
+    }
     // NPM has a lock thing, so still sequentially install all the packages.
     for (const version of versions) {
       const realPackageName = `${packageName}@${version}`;
@@ -195,23 +217,28 @@ export async function extractStringsFromPackageVersions(packageName: string, ver
       debug(`npm install ${packageNameToInstall}`);
       try {
         await p(npm.commands.install)([packageNameToInstall]);
+        installedVersions.push(version); // Only for installed case do we handle the version.
+        const targetDirPath = path.join(tempDir, "node_modules", targetDirName); // We are actually also in the right directory anyways though...
+        versionToInstallDirMap.set(version, targetDirPath);
       } catch (e) {
         console.error(`>>> Failed to install ${realPackageName}:`)
         console.log(e);
       }
-      const targetDirPath = path.join(tempDir, "node_modules", targetDirName); // We are actually also in the right directory anyways though...
-      versionToInstallDirMap.set(version, targetDirPath);
     }
     debug(`Begin scanning for strings in each package.`);
     const parallelScans: Promise<void>[] = [];
     for (const version of versions) {
       if (versionToInstallDirMap.has(version)) {
-        parallelScans.push(collectPackageNotableStringsIntoDict(output, versionToInstallDirMap.get(version)!, version, limit));
+        parallelScans.push(collectPackageNotableStringsIntoDict(versionsOutput, versionToInstallDirMap.get(version)!, version, limit));
       }
     }
     await Promise.all(parallelScans);
   }, true); // Set to `true` if you want to auto remove temp directory
-  return output;
+  return {
+    packageName,
+    versionOrder: installedVersions,
+    versions: versionsOutput,
+  }
 }
 
 type PackageStringsMatchResult = { [version: string]: number };
@@ -229,6 +256,47 @@ export async function matchBundleWithPackageVersionStrings(bundleContent: string
     output[version] = matchResult.matched.size;
   }
   return output;
+}
+
+/**
+ * Query NPM to extract a list of versions of a package that we should build string map for.
+ * @param packageName name of the package
+ * @param versionCountLimit number of versions we are expecting to build a map from
+ * @param ignoreAlphaBetaRc Whether to ignore packages with alpha/beta/rc in their name (e.g. this happens a lot for webpack)
+ */
+async function extractVersionsToSample(packageName: string, versionCountLimit: number = Infinity, ignoreAlphaBetaRc = true) {
+  debug(`npm load config`);
+  // await p(npm.load)();
+  const output = (await p(npm.commands.view)([packageName, "versions", "--json"])) as object;
+  // output format: { [latest_version]: { versions: [list of versions] } }
+  let originalVersions: string[] = [];
+  for (const k in output) {
+    if (output[k].versions && Array.isArray(output[k].versions)) {
+      originalVersions.push(...(output[k].versions as string[]));
+    }
+  }
+  // We will assume that originalVersions does go with the order of the releases
+  if (ignoreAlphaBetaRc) {
+    originalVersions = originalVersions.filter(v => !v.includes("alpha") && !v.includes("beta") && !v.includes("rc"));
+  }
+
+  if (versionCountLimit < originalVersions.length) {
+    const stepSize = Math.floor(originalVersions.length / versionCountLimit);
+    const outputVersions: string[] = [];
+    let i = 0;
+    while (outputVersions.length < versionCountLimit && i < originalVersions.length) {
+      outputVersions.push(originalVersions[i]);
+      i += stepSize;
+    }
+    return outputVersions;
+  } else {
+    return originalVersions;
+  }
+}
+
+export async function extractStringsFromPackage(packageName: string, versionCountLimit: number = Infinity, ignoreAlphaBetaRc = true, limit = DEFAULT_MAX_NOTABLE_STRING_COUNT_LIMIT): Promise<PackageStringsByVersionMapWithInfo> {
+  const versions = await extractVersionsToSample(packageName, versionCountLimit, ignoreAlphaBetaRc);
+  return await extractStringsFromPackageVersions(packageName, versions, limit);
 }
 
 async function main() {
@@ -327,7 +395,7 @@ async function main() {
   // console.log(">> MATCHED react-dom@0.14 count", result_14_on_14.matched.size);
 }
 if (require.main === module) {
-  main();
+  // main();
 }
 
 // TODO: we need to know which files in node_modules are the most important ones (actual source code)
