@@ -26,7 +26,7 @@ interface TopWebsiteData {
  */
 export const getCSV = async () => {
   if (fs.existsSync(PATH)) {
-    return fs.readFileSync(PATH);
+    return fs.readFileSync(PATH, "utf8");
   }
   const {data} = await axios.get(DOWNLOAD_URL);
   fs.writeFileSync(PATH, data);
@@ -37,16 +37,15 @@ export const getCSV = async () => {
  * Parse given CSV file content into website data
  * @param rawData string content of given raw CSV file
  */
-export function parseCSV(rawData: string): TopWebsiteData[] {
-  return Papa.parse(rawData, {header: true}).data as TopWebsiteData[];
+export function parseCSV(rawData: string, lines: number = 0): TopWebsiteData[] {
+  return Papa.parse(rawData, {header: true, preview: lines}).data as TopWebsiteData[];
 }
 
 /**
  * Gets and parses top site data.
  */
-export const download = async () => {
-  console.log(String(await getCSV()).substring(0, 1000));
-  return parseCSV(await getCSV());
+export const download = async (lines: number = 0) => {
+  return parseCSV(await getCSV(), lines);
 }
 
 /**
