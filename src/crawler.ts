@@ -107,14 +107,15 @@ export async function main(domains: string[]) {
   console.log('starting browser...');
 
   const results: {domain: string, output: SpaDetectorOutput}[] = [];
-  for (let domain of domains) {
+  for (let i in domains) {
+    const domain = domains[i];
     cluster.queue(async ({ page }) => {
       try {
         results.push({
           domain,
           output: await runOnPage(page, domain)
         });
-        console.log(domain);
+        console.log(domain, i, domains.length);
       } catch (e) {
         console.error(`>>> on domain "${domain}"`, e);
       }
