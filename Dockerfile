@@ -63,4 +63,4 @@ COPY --from=build /app/extensions /app/extensions/
 COPY --from=data million.csv /tmp/
 RUN ls /tmp/
 # RUN touch output.json && chmod 777 output.json
-CMD node dist/worker.bundle.js
+CMD node dist/worker.bundle.js 10
