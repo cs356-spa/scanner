@@ -1123,6 +1123,7 @@ const versions = {
   ]
 };
 const diffMap = new Map<number, number>(); // diff => count
+const patchDiffMap = new Map<number, number>(); // diff => count
 
 for (const host in versions) {
   const predicted = versions[host][0];
@@ -1137,6 +1138,12 @@ for (const host in versions) {
   if (predictedMajor === actualMajor) {
     const diff = Math.abs(predictedMinor - actualMinor);
     diffMap.set(diff, (diffMap.get(diff) || 0) + 1);
+    if (predictedMinor === actualMinor) {
+      const predictedPatch = parseInt(predictedChunks[2]);
+      const actualPatch = parseInt(actualChunks[2]);
+      const patchDiff = Math.abs(predictedPatch - actualPatch);
+      patchDiffMap.set(patchDiff, (patchDiffMap.get(patchDiff) || 0) + 1);
+    }
   } else {
     let diff = 0;
     if (predictedMajor === 1 && actualMajor === 2) {
@@ -1156,7 +1163,10 @@ for (const host in versions) {
   }
 }
 
+console.log(">> MINOR DIFF:")
 console.log(diffMap);
+console.log(">> PATCH DIFF:")
+console.log(patchDiffMap);
 
 /*
 >>> WARNING: large diff found: 1.11.2 vs 3.4.1
