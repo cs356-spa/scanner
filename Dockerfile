@@ -8,6 +8,7 @@ COPY src /app/src
 COPY extensions /app/extensions
 COPY tsconfig.json /app
 COPY webpack.config.js /app
+ENV IS_DOCKER 1
 RUN yarn build
 
 FROM node:14-buster-slim as data

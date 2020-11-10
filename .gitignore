@@ -2,3 +2,5 @@ node_modules
 output.json
 .build
 dist
+stats.json
+.DS_Store
