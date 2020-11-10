@@ -32,5 +32,8 @@ module.exports = {
   resolve: {
     modules: ['node_modules', 'scripts'],
     extensions: ['.ts', '.tsx', '.json', '.js', '.jsx']
+  },
+  externals: {
+    npm: 'npm'
   }
 };
