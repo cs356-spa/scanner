@@ -112,6 +112,7 @@ async function createCustomBrowser() {
   if (process.env.IS_DOCKER) {
     customArgs.push('--no-sandbox');
   }
+  console.log(process.env.IS_DOCKER ? 'google-chrome-stable': undefined);
   return {
     // defaultViewport: null,
     // executablePath: process.env.chrome,

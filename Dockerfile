@@ -8,7 +8,6 @@ COPY src /app/src
 COPY extensions /app/extensions
 COPY tsconfig.json /app
 COPY webpack.config.js /app
-ENV IS_DOCKER 1
 RUN yarn build
 
 FROM node:14-buster-slim as data
@@ -63,5 +62,6 @@ COPY --from=build /app/dist  /app/dist/
 COPY --from=build /app/extensions /app/extensions/
 COPY --from=data million.csv /tmp/
 RUN ls /tmp/
+ENV IS_DOCKER 1
 # RUN touch output.json && chmod 777 output.json
 CMD node dist/worker.bundle.js 10

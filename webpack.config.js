@@ -1,5 +1,6 @@
 const webpack = require('webpack');
 const path = require('path');
+const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: {
@@ -28,12 +29,14 @@ module.exports = {
     ]
   },
   plugins: [
+    new CopyPlugin({
+      patterns: [
+        { from: 'src/package_analyzer/data', to: 'data' }
+      ],
+    })
   ],
   resolve: {
     modules: ['node_modules', 'scripts'],
     extensions: ['.ts', '.tsx', '.json', '.js', '.jsx']
-  },
-  externals: {
-    npm: 'npm'
   }
 };
