@@ -51,4 +51,4 @@ ${reactVersions.map(e => `\\multicolumn{1}{|l|}{${e.version}} & \\multicolumn{1}
 \\end{tabular}
 `;
 
-console.log(latex);
+// console.log(latex);
