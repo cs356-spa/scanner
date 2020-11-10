@@ -5,7 +5,7 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "aggregate": "ts-node src/aggregate.ts",
-    "start-prod": "node dist/worker/bundle.j",
+    "start-prod": "node dist/worker/bundle.js",
     "test": "jest",
     "tdd": "jest --watch",
     "build": "webpack"
