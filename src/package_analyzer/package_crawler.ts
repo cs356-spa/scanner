@@ -80,13 +80,13 @@ function preparePackageStringsByVersionsToScan(filenames: string[]): PackageStri
 
 // TODO: enter pre-prepared packages here.
 const PACKAGE_STRINGS_BY_VERSION_JSON_FILENAMES = [
-  "./data/axios_strings.json",
-  "./data/moment_strings.json",
-  "./data/uuid_strings.json",
-  "./data/core_js_strings.json",
-  "./data/jquery_strings.json"
-]
-const PACKAGE_STRINGS_BY_VERSION = preparePackageStringsByVersionsToScan(PACKAGE_STRINGS_BY_VERSION_JSON_FILENAMES);
+  "data/axios_strings.json",
+  // "data/moment_strings.json",
+  "data/uuid_strings.json",
+  "data/core_js_strings.json",
+  "data/jquery_strings.json"
+].map(e => __dirname + "/" + e)
+export const PACKAGE_STRINGS_BY_VERSION = preparePackageStringsByVersionsToScan(PACKAGE_STRINGS_BY_VERSION_JSON_FILENAMES);
 
 /**
  * @param sources 
@@ -95,7 +95,7 @@ const PACKAGE_STRINGS_BY_VERSION = preparePackageStringsByVersionsToScan(PACKAGE
  * @param packageVersionCollector collector of final data. Returned collector is the same reference as this one.
  * @param allowThirdParty NOT implemented
  */
-function staticScanForPackage(
+export function staticScanForPackage(
   sources: Source[],
   host: string,
   packagesToScan: PackageStringsByVersionsToScan,

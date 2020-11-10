@@ -62,5 +62,6 @@ COPY --from=build /app/dist  /app/dist/
 COPY --from=build /app/extensions /app/extensions/
 COPY --from=data million.csv /tmp/
 RUN ls /tmp/
+ENV IS_DOCKER 1
 # RUN touch output.json && chmod 777 output.json
 CMD node dist/worker.bundle.js 10

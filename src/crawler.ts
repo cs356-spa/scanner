@@ -1,5 +1,6 @@
 // import * as path from 'path';
 import { Cluster } from 'puppeteer-cluster';
+import { staticScanForPackage, PACKAGE_STRINGS_BY_VERSION } from './package_analyzer/package_crawler';
 import { staticScanForSPAFramework, mergeDetectorOutput, SpaDetectorOutput }  from './static_detector';
 
 const { dynamicScanForSPAFramework } = require("./dynamic_detector");
@@ -71,6 +72,29 @@ async function runOnPage(page, domain) {
   debug(`Finish task for ${domain}`);
   const output = mergeDetectorOutput(staticOutput, dynamicOutput);
 
+  let collector = {};
+
+  collector = staticScanForPackage(sources, new URL(domain).hostname, PACKAGE_STRINGS_BY_VERSION, collector);
+  // Convert collector output to regular output
+  for (let packageName in collector) {
+    const packageVersion = Object.keys(collector[packageName])[0];
+    output[packageName] = {
+      version: packageVersion,
+      reasonURL: collector[packageName][packageVersion].values().next().value.values().next().value
+    };
+  };
+  console.log(output);
+
+
+  // {
+  //   react: {
+  //     version: '16.13.1',
+  //     reasonURL: 'https://abs.twimg.com/responsive-web/client-web/vendors~main.aee47a35.js',
+  //     confidence: 1,
+  //     isStatic: true
+  //   }
+  // }
+
   try {
     // Kill the page when necessary. This is required to allow a clear profile when navigating to the next page.
     // page.evaluate also has the change of failure similar to above.
@@ -81,11 +105,14 @@ async function runOnPage(page, domain) {
 }
 
 async function createCustomBrowser() {
-  const customArgs = [
-    '--disable-dev-shm-usage',
-    '--no-sandbox',
+  let customArgs = [
+    '--disable-dev-shm-usage'
     // `--load-extension=${path.resolve("./extensions/react_devtools/")}`
   ];
+  if (process.env.IS_DOCKER) {
+    customArgs.push('--no-sandbox');
+  }
+  console.log(process.env.IS_DOCKER ? 'google-chrome-stable': undefined);
   return {
     // defaultViewport: null,
     // executablePath: process.env.chrome,
@@ -93,7 +120,7 @@ async function createCustomBrowser() {
     // ignoreDefaultArgs: ["--disable-extensions"],
     args: customArgs,
     product: 'chrome',
-    executablePath: 'google-chrome-stable'
+    executablePath: process.env.IS_DOCKER ? 'google-chrome-stable': undefined
   };
 }
 

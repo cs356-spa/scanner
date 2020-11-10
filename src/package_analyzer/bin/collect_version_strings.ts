@@ -1,5 +1,5 @@
 import { promises as fs } from "fs";
-import { extractStringsFromPackageVersions } from "../packageUtils";
+import { extractStringsFromPackageVersions } from "../npmUtils";
 
 const USAGE = `Generate and write a dictionary of strings contains in different versions of a package.
 The format of output JSON file is { [version: string]: string[] }
