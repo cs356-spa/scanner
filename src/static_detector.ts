@@ -1,3 +1,5 @@
+import { parseBundleString } from "./package_analyzer/parseUtils";
+
 // type SpaType = "react"|"angular"|"angularjs"|"vue";
 export const SPA_TYPES = ["react", "angular", "angularjs", "vue"] as const;
 export type SpaType = typeof SPA_TYPES[number];
@@ -333,6 +335,44 @@ export function isBundledFile(source: Source): boolean {
   } else {
     return false;
   }
+}
+
+/**
+ * Heuristic to test if the source is a bundled file, but very strict.
+ * @param {Source} source 
+ * @returns {boolean}
+ */
+export function isBundledFileStrict(source: Source): boolean {
+  // If the file is NOT a JS file, trivially return false
+  if (!isURLFileTypeJS(source.url)) {
+    return false;
+  }
+  // If the file is TOO small, we trivially consider it NOT a bundle (even if actually Webpack is used) as it should not be a core part of SPA anyways.
+  if (source.content.length < 1000) {
+    return false;
+  }
+  // If .chunk or chunk. or .bundle/bundle. is present as part of the file, very likely it is a bundled file. (either a chunk or a full independent bundle)
+  const pathSegments = source.url.split("/");
+  const filename = pathSegments.length > 0 ? pathSegments[pathSegments.length-1] : ""; // length == 0 can happen when URL for some weird reason is missing.
+  if (filename.includes(".chunk") || filename.includes("chunk.") || filename.includes(".bundle") || filename.includes("bundle.")) {
+    return true;
+  }
+  // Most common bundle type is Webpack, so check if Webpack (webpackJsonp/webpackChunk) is ever mentioned
+  // webpackJsonp example: https://reactjs.org/app-da93669150e5bde53c5c.js (url might change, but starts with "app")
+  // webpackChunk example: https://webpack.js.org/vendor.bundle.js
+  if (source.content.includes("webpackJsonp") || source.content.includes("webpackChunk")) {
+    return true;
+  }
+  // If there are too many lines in the file, likely NOT a bundle.
+  if (source.content.split("\n").length > 10) {
+    return false;
+  }
+
+  const parseAttempt = parseBundleString(source.content);
+  if (Object.keys(parseAttempt.modules).length > 0) {
+    return true;
+  }
+  return false;
 }
 
 /**

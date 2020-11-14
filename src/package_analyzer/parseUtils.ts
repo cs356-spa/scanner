@@ -5,12 +5,16 @@ import * as _ from "lodash";
 import * as acorn from "acorn";
 import * as walk from "acorn-walk";
 
+export function parseBundleFile(bundlePath: string): { src: string, modules: Object } {
+  const content = fs.readFileSync(bundlePath, 'utf8');
+  return parseBundleString(content);
+}
+
 /**
  * @param {string} bundlePath
  * @returns {{ src: string, modules: Object }}
  */
-export function parseBundle(bundlePath: string): { src: string, modules: Object } {
-  const content = fs.readFileSync(bundlePath, 'utf8');
+export function parseBundleString(content: string): { src: string, modules: Object } {
   const ast = acorn.parse(content, {
     sourceType: 'script',
     // I believe in a bright future of ECMAScript!
@@ -284,5 +288,5 @@ function getModuleLocation(node) {
 if (require.main === module) {
   // This does not always work unfortunately: for our own generated bundles, it does not successfully parse.
   // This implies more work should be done on analyzing different webpack configs.
-  console.log(Object.keys(parseBundle("/Users/kun/Desktop/Fall_2020/CS356/Project/scanner/src/package_analyzer/test/bundles/react.16.umd.web.prod.js").modules))
+  console.log(Object.keys(parseBundleFile("/Users/kun/Desktop/Fall_2020/CS356/Project/scanner/src/package_analyzer/test/bundles/react.16.umd.web.prod.js").modules))
 }
